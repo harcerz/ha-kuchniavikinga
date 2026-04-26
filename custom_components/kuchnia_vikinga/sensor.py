@@ -1,4 +1,4 @@
-"""Sensor platform for Kuchnia Vikinga — one sensor per diet."""
+"""Sensor platform — one sensor per household-member entry."""
 
 from __future__ import annotations
 
@@ -6,17 +6,20 @@ from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, MEALS
+from .const import (
+    CONF_DIET_SLUG,
+    CONF_PERSON_NAME,
+    DATA_COORDINATOR,
+    DOMAIN,
+    MEALS,
+)
 from .coordinator import KuchniaVikingaCoordinator
 from .parser import Diet, MenuSnapshot
-
-# State will fall back to this when no obiad is available for today
-STATE_NO_DATA = "unknown"
 
 
 async def async_setup_entry(
@@ -24,48 +27,39 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Create one sensor per diet found in the latest snapshot."""
-    coordinator: KuchniaVikingaCoordinator = hass.data[DOMAIN][entry.entry_id]
-
-    known: set[str] = set()
-
-    @callback
-    def _add_new_entities() -> None:
-        snapshot = coordinator.data
-        if snapshot is None:
-            return
-        new_entities: list[KuchniaVikingaDietSensor] = []
-        for slug in snapshot.diets:
-            if slug in known:
-                continue
-            known.add(slug)
-            new_entities.append(KuchniaVikingaDietSensor(coordinator, slug))
-        if new_entities:
-            async_add_entities(new_entities)
-
-    _add_new_entities()
-    entry.async_on_unload(coordinator.async_add_listener(_add_new_entities))
+    coordinator: KuchniaVikingaCoordinator = hass.data[DOMAIN][DATA_COORDINATOR]
+    async_add_entities([KuchniaVikingaDietSensor(coordinator, entry)])
 
 
 class KuchniaVikingaDietSensor(CoordinatorEntity[KuchniaVikingaCoordinator], SensorEntity):
-    """Sensor representing a single diet from kuchniavikinga.pl."""
+    """Sensor showing today's lunch for one household member's diet."""
 
     _attr_has_entity_name = True
     _attr_icon = "mdi:silverware-fork-knife"
+    _attr_translation_key = "today_obiad"
 
-    def __init__(self, coordinator: KuchniaVikingaCoordinator, diet_slug: str) -> None:
+    def __init__(
+        self,
+        coordinator: KuchniaVikingaCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
         super().__init__(coordinator)
-        self._diet_slug = diet_slug
-        self._attr_unique_id = f"{DOMAIN}_{diet_slug}"
-        self._attr_translation_key = "diet"
-        self._attr_translation_placeholders = {"diet_name": self._diet.name if self._diet else diet_slug}
-        self._attr_name = self._diet.name if self._diet else diet_slug
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_obiad"
+        person_name = entry.data[CONF_PERSON_NAME]
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, "kuchnia_vikinga")},
-            name="Kuchnia Vikinga",
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=person_name,
             manufacturer="kuchniavikinga.pl",
+            model="Menu Kuchni Vikinga",
             entry_type=DeviceEntryType.SERVICE,
             configuration_url="https://kuchniavikinga.pl/menu/",
+        )
+
+    @property
+    def _diet_slug(self) -> str:
+        return self._entry.options.get(
+            CONF_DIET_SLUG, self._entry.data[CONF_DIET_SLUG]
         )
 
     @property
@@ -96,7 +90,6 @@ class KuchniaVikingaDietSensor(CoordinatorEntity[KuchniaVikingaCoordinator], Sen
 
     @property
     def native_value(self) -> str | None:
-        """State = today's obiad (lunch) — first variant's description, truncated."""
         diet = self._diet
         idx = self._today_index
         if diet is None or idx is None:
@@ -105,7 +98,6 @@ class KuchniaVikingaDietSensor(CoordinatorEntity[KuchniaVikingaCoordinator], Sen
         obiad = meals.get("obiad")
         if not obiad:
             return None
-        # Take first variant; truncate to fit HA 255-char state limit
         text = obiad[0].description or obiad[0].label
         return text[:250] if text else None
 
@@ -116,27 +108,26 @@ class KuchniaVikingaDietSensor(CoordinatorEntity[KuchniaVikingaCoordinator], Sen
         if diet is None or snap is None:
             return {}
 
-        today_idx = self._today_index
         attrs: dict[str, Any] = {
+            "person": self._entry.data[CONF_PERSON_NAME],
             "diet_slug": diet.slug,
             "diet_name": diet.name,
             "menu_url": f"https://kuchniavikinga.pl/menu/#{diet.slug}",
         }
 
-        # Today's meals as flat keys
+        today_idx = self._today_index
         if today_idx is not None and today_idx in diet.days:
-            for meal_slug, (meal_name, _t) in MEALS.items():
+            for meal_slug in MEALS:
                 variants = diet.days[today_idx].get(meal_slug, [])
                 attrs[f"today_{meal_slug}"] = _format_variants(variants)
 
-        # Full 14-day plan as nested dict (date -> meal -> variants)
         plan: dict[str, Any] = {}
         for day_idx, meals in sorted(diet.days.items()):
             day_date = snap.day_dates.get(day_idx)
             if day_date is None:
                 continue
             day_entry: dict[str, Any] = {}
-            for meal_slug, (meal_name, _t) in MEALS.items():
+            for meal_slug in MEALS:
                 variants = meals.get(meal_slug, [])
                 if not variants:
                     continue
@@ -147,7 +138,6 @@ class KuchniaVikingaDietSensor(CoordinatorEntity[KuchniaVikingaCoordinator], Sen
 
 
 def _format_variants(variants: list) -> str:
-    """Render variants as a single human-readable line (or '' if none)."""
     if not variants:
         return ""
     parts = []

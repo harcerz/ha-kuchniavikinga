@@ -1,4 +1,4 @@
-"""Calendar platform for Kuchnia Vikinga — one calendar per diet."""
+"""Calendar platform — one calendar per household-member entry."""
 
 from __future__ import annotations
 
@@ -6,13 +6,20 @@ from datetime import datetime, timedelta
 
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, MEAL_DURATION_MINUTES, MEALS
+from .const import (
+    CONF_DIET_SLUG,
+    CONF_PERSON_NAME,
+    DATA_COORDINATOR,
+    DOMAIN,
+    MEAL_DURATION_MINUTES,
+    MEALS,
+)
 from .coordinator import KuchniaVikingaCoordinator
 from .parser import Diet, MenuSnapshot
 
@@ -22,47 +29,41 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    coordinator: KuchniaVikingaCoordinator = hass.data[DOMAIN][entry.entry_id]
-    known: set[str] = set()
-
-    @callback
-    def _add_new_entities() -> None:
-        snapshot = coordinator.data
-        if snapshot is None:
-            return
-        new_entities: list[KuchniaVikingaDietCalendar] = []
-        for slug in snapshot.diets:
-            if slug in known:
-                continue
-            known.add(slug)
-            new_entities.append(KuchniaVikingaDietCalendar(coordinator, slug))
-        if new_entities:
-            async_add_entities(new_entities)
-
-    _add_new_entities()
-    entry.async_on_unload(coordinator.async_add_listener(_add_new_entities))
+    coordinator: KuchniaVikingaCoordinator = hass.data[DOMAIN][DATA_COORDINATOR]
+    async_add_entities([KuchniaVikingaDietCalendar(coordinator, entry)])
 
 
 class KuchniaVikingaDietCalendar(
     CoordinatorEntity[KuchniaVikingaCoordinator], CalendarEntity
 ):
-    """Calendar entity surfacing each meal of a diet as an event."""
+    """Calendar surfacing each meal of a household member's diet."""
 
     _attr_has_entity_name = True
     _attr_icon = "mdi:calendar-clock"
+    _attr_translation_key = "menu"
 
-    def __init__(self, coordinator: KuchniaVikingaCoordinator, diet_slug: str) -> None:
+    def __init__(
+        self,
+        coordinator: KuchniaVikingaCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
         super().__init__(coordinator)
-        self._diet_slug = diet_slug
-        diet = self._diet
-        self._attr_unique_id = f"{DOMAIN}_{diet_slug}_calendar"
-        self._attr_name = diet.name if diet else diet_slug
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_calendar"
+        person_name = entry.data[CONF_PERSON_NAME]
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, "kuchnia_vikinga")},
-            name="Kuchnia Vikinga",
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=person_name,
             manufacturer="kuchniavikinga.pl",
+            model="Menu Kuchni Vikinga",
             entry_type=DeviceEntryType.SERVICE,
             configuration_url="https://kuchniavikinga.pl/menu/",
+        )
+
+    @property
+    def _diet_slug(self) -> str:
+        return self._entry.options.get(
+            CONF_DIET_SLUG, self._entry.data[CONF_DIET_SLUG]
         )
 
     @property
@@ -98,16 +99,17 @@ class KuchniaVikingaDietCalendar(
                     continue
                 start = datetime.combine(day_date, meal_time).replace(tzinfo=tz)
                 end = start + timedelta(minutes=MEAL_DURATION_MINUTES)
-                summary = _summary(meal_name, variants)
-                description = _description(variants)
                 events.append(
                     CalendarEvent(
                         start=start,
                         end=end,
-                        summary=summary,
-                        description=description,
+                        summary=_summary(meal_name, variants),
+                        description=_description(variants),
                         location=diet.name,
-                        uid=f"{DOMAIN}_{diet.slug}_{day_date.isoformat()}_{meal_slug}",
+                        uid=(
+                            f"{DOMAIN}_{self._entry.entry_id}_"
+                            f"{day_date.isoformat()}_{meal_slug}"
+                        ),
                     )
                 )
         events.sort(key=lambda e: e.start)
@@ -115,7 +117,6 @@ class KuchniaVikingaDietCalendar(
 
     @property
     def event(self) -> CalendarEvent | None:
-        """Return the next upcoming event."""
         now = dt_util.now()
         for ev in self._all_events():
             if ev.end >= now:
@@ -136,15 +137,12 @@ class KuchniaVikingaDietCalendar(
 
 
 def _summary(meal_name: str, variants: list) -> str:
-    """First variant becomes the event title (calendar UIs only show summary)."""
     first = variants[0]
     head = first.description or first.label or meal_name
-    head = head[:80]
-    return f"{meal_name}: {head}"
+    return f"{meal_name}: {head[:80]}"
 
 
 def _description(variants: list) -> str:
-    """Full meal text in the event description (visible when expanded)."""
     lines: list[str] = []
     for v in variants:
         if v.label and v.description:

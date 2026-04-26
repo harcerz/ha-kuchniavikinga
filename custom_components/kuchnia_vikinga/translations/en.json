@@ -2,12 +2,48 @@
   "config": {
     "step": {
       "user": {
-        "title": "Kuchnia Vikinga",
-        "description": "Add the Kuchnia Vikinga menu integration. The full menu (all 17 diets, 14 days) will be fetched from kuchniavikinga.pl every 6 hours."
+        "title": "Add household member",
+        "description": "Pick a name for this person and the diet they follow on kuchniavikinga.pl. You can add the integration multiple times — one entry per household member.",
+        "data": {
+          "person_name": "Name",
+          "diet_slug": "Diet"
+        }
+      }
+    },
+    "error": {
+      "name_required": "Name cannot be empty.",
+      "diet_invalid": "Pick a diet from the list."
+    },
+    "abort": {
+      "already_configured": "An entry with this name already exists.",
+      "cannot_connect": "Could not load the menu page from kuchniavikinga.pl.",
+      "no_diets_found": "Could not find any diets on the menu page."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Change diet",
+        "data": {
+          "diet_slug": "Diet"
+        }
       }
     },
     "abort": {
-      "single_instance_allowed": "Kuchnia Vikinga is already configured."
+      "cannot_connect": "Could not load the menu page from kuchniavikinga.pl.",
+      "no_diets_found": "Could not find any diets on the menu page."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "today_obiad": {
+        "name": "Today's lunch"
+      }
+    },
+    "calendar": {
+      "menu": {
+        "name": "Menu"
+      }
     }
   }
 }

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
+import logging
 from typing import Any
 
 from bs4 import BeautifulSoup, Tag
 
 from .const import MEALS, MONTH_PL_TO_NUM, WEEKDAY_SLUG_TO_ISO
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -100,13 +103,15 @@ def _parse_day_dates(soup: BeautifulSoup, today: date) -> dict[int, date]:
         if month is None:
             continue
 
-        # Pick the year that places the date on or after today (window starts at "today")
-        for year in (today.year, today.year + 1):
+        # The 14-day window starts at most a few days before "today"; pick the
+        # year that lands the date close to the current date (handles year-end roll).
+        window_start = today - timedelta(days=7)
+        for year in (today.year - 1, today.year, today.year + 1):
             try:
                 candidate = date(year, month, day_num)
             except ValueError:
                 continue
-            if candidate >= today.replace(day=1):
+            if candidate >= window_start:
                 result[idx] = candidate
                 break
 
@@ -143,7 +148,11 @@ def _parse_meal_id(meal_id: str) -> tuple[str, str] | None:
     weekday = parts[0]
     # meal slug may itself contain underscores (drugie_sniadanie) but no dashes
     meal = parts[1]
-    if weekday not in WEEKDAY_SLUG_TO_ISO or meal not in MEALS:
+    if weekday not in WEEKDAY_SLUG_TO_ISO:
+        _LOGGER.debug("Unknown weekday slug in meal id: %s", meal_id)
+        return None
+    if meal not in MEALS:
+        _LOGGER.debug("Unknown meal slug in meal id: %s", meal_id)
         return None
     return weekday, meal
 

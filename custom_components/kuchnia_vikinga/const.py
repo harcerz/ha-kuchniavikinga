@@ -10,6 +10,13 @@ MENU_URL = "https://kuchniavikinga.pl/menu/"
 
 DEFAULT_SCAN_INTERVAL_HOURS = 6
 
+# Config entry data / options keys
+CONF_PERSON_NAME = "person_name"
+CONF_DIET_SLUG = "diet_slug"
+
+# Singleton coordinator key under hass.data[DOMAIN]
+DATA_COORDINATOR = "coordinator"
+
 # Polish weekday slug -> isoweekday (1=Mon ... 7=Sun)
 WEEKDAY_SLUG_TO_ISO = {
     "Poniedzialek": 1,

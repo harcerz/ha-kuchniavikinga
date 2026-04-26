@@ -1,7 +1,7 @@
 {
   "domain": "kuchnia_vikinga",
   "name": "Kuchnia Vikinga",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "documentation": "https://github.com/harcerz/ha-kuchniavikinga",
   "issue_tracker": "https://github.com/harcerz/ha-kuchniavikinga/issues",
   "codeowners": ["@harcerz"],

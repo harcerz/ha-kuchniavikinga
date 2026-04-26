@@ -2,12 +2,48 @@
   "config": {
     "step": {
       "user": {
-        "title": "Kuchnia Vikinga",
-        "description": "Dodaj integrację z menu Kuchni Vikinga. Pełne menu (wszystkie 17 diet, 14 dni) będzie pobierane z kuchniavikinga.pl co 6 godzin."
+        "title": "Dodaj domownika",
+        "description": "Podaj imię i wybierz dietę z kuchniavikinga.pl. Integrację można dodać wielokrotnie — jedna pozycja na domownika.",
+        "data": {
+          "person_name": "Imię",
+          "diet_slug": "Dieta"
+        }
+      }
+    },
+    "error": {
+      "name_required": "Imię nie może być puste.",
+      "diet_invalid": "Wybierz dietę z listy."
+    },
+    "abort": {
+      "already_configured": "Wpis z tym imieniem już istnieje.",
+      "cannot_connect": "Nie udało się pobrać strony menu z kuchniavikinga.pl.",
+      "no_diets_found": "Nie znaleziono żadnych diet na stronie menu."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Zmień dietę",
+        "data": {
+          "diet_slug": "Dieta"
+        }
       }
     },
     "abort": {
-      "single_instance_allowed": "Kuchnia Vikinga jest już skonfigurowana."
+      "cannot_connect": "Nie udało się pobrać strony menu z kuchniavikinga.pl.",
+      "no_diets_found": "Nie znaleziono żadnych diet na stronie menu."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "today_obiad": {
+        "name": "Dzisiejszy obiad"
+      }
+    },
+    "calendar": {
+      "menu": {
+        "name": "Menu"
+      }
     }
   }
 }

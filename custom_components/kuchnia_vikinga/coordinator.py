@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date, timedelta
 import logging
 
@@ -18,9 +19,28 @@ _LOGGER = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=60)
 USER_AGENT = (
-    "Mozilla/5.0 (compatible; HomeAssistant-KuchniaVikinga/0.1; "
+    "Mozilla/5.0 (compatible; HomeAssistant-KuchniaVikinga/0.2; "
     "+https://github.com/harcerz/ha-kuchniavikinga)"
 )
+
+
+async def fetch_menu_snapshot(hass: HomeAssistant) -> MenuSnapshot:
+    """Fetch the menu page once and parse it. Independent of the coordinator.
+
+    Used by the config/options flow to populate the diet dropdown without
+    booting the singleton coordinator (which would otherwise leak if the
+    user aborts the flow).
+    """
+    session = async_get_clientsession(hass)
+    async with session.get(
+        MENU_URL,
+        timeout=REQUEST_TIMEOUT,
+        headers={"User-Agent": USER_AGENT, "Accept": "text/html"},
+    ) as resp:
+        resp.raise_for_status()
+        html = await resp.text()
+    today = dt_util.now().date()
+    return await hass.async_add_executor_job(parse_menu_html, html, today)
 
 
 class KuchniaVikingaCoordinator(DataUpdateCoordinator[MenuSnapshot]):
@@ -35,21 +55,10 @@ class KuchniaVikingaCoordinator(DataUpdateCoordinator[MenuSnapshot]):
         )
 
     async def _async_update_data(self) -> MenuSnapshot:
-        session = async_get_clientsession(self.hass)
         try:
-            async with session.get(
-                MENU_URL,
-                timeout=REQUEST_TIMEOUT,
-                headers={"User-Agent": USER_AGENT, "Accept": "text/html"},
-            ) as resp:
-                resp.raise_for_status()
-                html = await resp.text()
-        except aiohttp.ClientError as err:
+            return await fetch_menu_snapshot(self.hass)
+        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
             raise UpdateFailed(f"Error fetching menu: {err}") from err
-
-        today = dt_util.now().date()
-        try:
-            return await self.hass.async_add_executor_job(parse_menu_html, html, today)
         except Exception as err:  # noqa: BLE001 - parser failures shouldn't kill HA
             raise UpdateFailed(f"Error parsing menu HTML: {err}") from err
 
