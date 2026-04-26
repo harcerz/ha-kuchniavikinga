@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Kuchnia Vikinga",
+        "description": "Add the Kuchnia Vikinga menu integration. The full menu (all 17 diets, 14 days) will be fetched from kuchniavikinga.pl every 6 hours."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Kuchnia Vikinga is already configured."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "diet": {
+        "name": "{diet_name}"
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Kuchnia Vikinga",
+        "description": "Dodaj integrację z menu Kuchni Vikinga. Pełne menu (wszystkie 17 diet, 14 dni) będzie pobierane z kuchniavikinga.pl co 6 godzin."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Kuchnia Vikinga jest już skonfigurowana."
+    }
+  }
+}
