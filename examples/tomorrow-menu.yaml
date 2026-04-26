@@ -1,0 +1,27 @@
+# Pełne menu domownika na jutro (wszystkie posiłki).
+#
+# Jak użyć:
+#  1. W Lovelace: Edytuj dashboard → Dodaj kartę → "Manual" → wklej YAML poniżej.
+#  2. Podmień wartość zmiennej `s` w pierwszej linii Jinja na entity_id swojego
+#     domownika. Znajdziesz go w Narzędzia deweloperskie → Stany, szukając
+#     po imieniu (np. `sensor.mateusz_dzisiejszy_obiad`).
+#
+# Karta wczytuje atrybut `plan` z sensora (14-dniowy słownik
+# {data: {posiłek: [{label, description}]}}) i renderuje sekcję na jutro.
+
+type: markdown
+content: |
+  {% set s = 'sensor.mateusz_dzisiejszy_obiad' %}
+  {% set plan = state_attr(s, 'plan') or {} %}
+  {% set t = (now() + timedelta(days=1)).strftime('%Y-%m-%d') %}
+  {% set day = plan.get(t, {}) %}
+  {% set order = ['sniadanie','drugie_sniadanie','obiad','podwieczorek','kolacja'] %}
+  {% set names = {'sniadanie':'🥐 Śniadanie','drugie_sniadanie':'🥪 Drugie śniadanie','obiad':'🍽️ Obiad','podwieczorek':'🍰 Podwieczorek','kolacja':'🥗 Kolacja'} %}
+  ### {{ state_attr(s, 'person') }} — {{ state_attr(s, 'diet_name') }}
+  **Jutro · {{ t }}**
+  {% if not day %}
+  *Brak danych na jutro — menu może nie być jeszcze opublikowane.*
+  {% else %}{% for slug in order %}{% if day.get(slug) %}
+  **{{ names[slug] }}**
+  {% for v in day[slug] %}- {% if v.label %}*{{ v.label }}* — {% endif %}{{ v.description }}
+  {% endfor %}{% endif %}{% endfor %}{% endif %}
